@@ -2,11 +2,13 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Ventuz.Remoting4;
 using Ventuz.Remoting4.MachineService;
 using Ventuz.Remoting4.MachineService.VMS2;
-using static CommunityToolkit.Mvvm.ComponentModel.__Internals.__TaskExtensions.TaskAwaitableWithoutEndValidation;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace LittleVentuzLauncher
 {
@@ -18,19 +20,18 @@ namespace LittleVentuzLauncher
 
         #region Members
 
-        private Cluster? _cluster;
+        private Cluster _cluster;
 
-        private VMSDiscovery? _vmsDiscovery;
+        private VMSDiscovery _vmsDiscovery;
         private List<VMS> _discoveredMachines = new List<VMS>();
 
         private List<VMSClient> _activeVmsClients = new List<VMSClient>();
 
-        private List<VMS> _selectedMachines;
-        private List<string> _vprList;
+        private List<VMS> _selectedMachines = new List<VMS>();
+        private List<string> _vprList = new List<string>();
         private int _vprIndex = 0;
 
-        private SemaphoreSlim semaphore;
-        private ManualResetEventSlim _event = new ManualResetEventSlim();
+        private ManualResetEventSlim _vprLoadedEvent = new ManualResetEventSlim();
 
         #endregion
 
@@ -50,6 +51,13 @@ namespace LittleVentuzLauncher
         /// </summary>
         public Launcher()
         {
+            int[] additionalListeningPorts = new int[] { 21406, 20406, 19406, 19402 };
+
+            // Start discovering
+            _vmsDiscovery = new VMSDiscovery(10, 22406, additionalListeningPorts);
+            _vmsDiscovery.PropertyChanged += HandleVmsDiscoveryPropertyChanged;
+
+            _cluster = null;
 
         }
 
@@ -69,17 +77,7 @@ namespace LittleVentuzLauncher
         public void StartVmsDiscovery()
         {
 
-            if (_vmsDiscovery == null)
-            {
-
-                int[] additionalListeningPorts = new int[] { 21406, 20406, 19406, 19402 };
-
-                // Start discovering
-                _vmsDiscovery = new VMSDiscovery(10, 22406, additionalListeningPorts);
-                _vmsDiscovery.PropertyChanged += HandleVmsDiscoveryPropertyChanged;
-                _vmsDiscovery.Discover();
-
-            }
+            _vmsDiscovery.Discover();
 
         }
 
@@ -132,11 +130,11 @@ namespace LittleVentuzLauncher
                     // Get VPR path
                     vprFullPath = vprs.ElementAt(vprIndex);
 
-                    _event.Reset();
+                    _vprLoadedEvent.Reset();
 
                     await StartVmsClientsAsync(vprFullPath);
 
-                    _event.Wait();
+                    _vprLoadedEvent.Wait();
 
                 }
 
@@ -175,6 +173,7 @@ namespace LittleVentuzLauncher
 
             // Add Cluster event handlers
             _cluster.ClusterStateChanged += HandleClusterStateChanged;
+            _cluster.SceneStatusChanged += HandleSceneStatusChanged;
 
             // Start cluster
             _cluster.Start();
@@ -235,13 +234,19 @@ namespace LittleVentuzLauncher
                         client.Start(project.ID.ToString());
                     }
 
+                    // Wait 30 seconds for scene to load
+                    await Task.Delay(30000);
+
+                    // OK state:
+                    _vprLoadedEvent.Set();
+
                 }
 
             }
             else
             {
                 // Resume launching loop
-                _event.Set();
+                _vprLoadedEvent.Set();
             }
 
         }
@@ -274,12 +279,41 @@ namespace LittleVentuzLauncher
 
             if (_cluster.ClusterState == ClusterState.Ok)
             {
-                // OK state:
-                _event.Set();
             }
 
         }
 
+        /// <summary>
+        /// Handles the <see cref="Cluster.SceneStatusChanged"/> event.
+        /// </summary>
+        private void HandleSceneStatusChanged(object? sender, SceneStatusChangedEventArgs e)
+        {
+
+        }
+
+        private void CheckForMainSceneActivation(IID iid, SceneStatus status)
+        {
+
+            Debug.WriteLine($"Scene {status.Identity} status is now {GetSceneStatusString(status)}");
+
+            if (status.Identity == "*defaultlayout*") { return; } // Ignore default layout
+
+            switch (GetSceneStatusString(status))
+            {
+                case "Active":
+                case "Validated":
+
+                    // OK state:
+                    _vprLoadedEvent.Set();
+
+                    break;
+
+                default:
+                    // Other states are ignored
+                    return;
+            }
+
+        }
 
         public void StopLaunching()
         {
@@ -345,6 +379,56 @@ namespace LittleVentuzLauncher
 
             System.Diagnostics.Debug.WriteLine($"{ipAddress.ToString()} is not in the 'AddressFamily.InterNetwork'");
             return false; // Not a local machine's IP address
+        }
+
+
+        /// <summary>
+        /// Returns the SceneStatus.Status value and an optional loading/validation progress.
+        /// </summary>
+        public static uint GetSceneStatusValues(SceneStatus status, out uint progress)
+        {
+            progress = status.Status & 0xFF;
+            return status.Status & 0xFFFFFF00;
+        }
+
+        /// <summary>
+        /// Returns the string representation of a SceneStatus.
+        /// </summary>
+        public static string GetSceneStatusString(SceneStatus status)
+        {
+            uint p;
+            switch (GetSceneStatusValues(status, out p))
+            {
+                case 0x0:               // No Status or Loading
+                    if (p == 0)
+                        return "No Status";
+                    else
+                        return "Loading";
+
+                case 0x00000100:        // Loaded or Validating
+                    if (p == 0)
+                        return "Loaded";
+                    else
+                        return "Validating";
+
+                case 0x00000300:        // Validated
+                    if (status.PortIndex == null)
+                        return "Validated";
+                    else
+                        return "Active";
+
+                case 0x80010000:        // Scene Disposed
+                    return "Disposed";
+
+                case 0x80020000:        // Load Error
+                    return "Load Error";
+
+                default:
+                    Console.WriteLine("SHOULD NOT COME HERE!!!");
+                    break;
+            }
+
+            return "Undefined";
         }
 
         #endregion

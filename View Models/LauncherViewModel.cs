@@ -174,6 +174,7 @@ namespace LittleVentuzLauncher
         {
             if (_vprList.Length == 0) return false;
             if (_clusterMachines.Count == 0) return false;
+            if (IsLaunching) return false;
             return true;
         }
 
