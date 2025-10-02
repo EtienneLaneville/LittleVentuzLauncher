@@ -200,7 +200,14 @@ namespace LittleVentuzLauncher
                     client.Disconnect();
                 }
 
+                _cluster = null;
+
             }
+        }
+
+        public void StopLaunching()
+        {
+            StopCluster();
         }
 
         private async Task StartVmsClientsAsync(string vpr)
@@ -312,11 +319,6 @@ namespace LittleVentuzLauncher
                     // Other states are ignored
                     return;
             }
-
-        }
-
-        public void StopLaunching()
-        {
 
         }
 

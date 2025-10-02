@@ -180,7 +180,10 @@ namespace LittleVentuzLauncher
 
         private void StopLaunching()
         {
-            // Stop launching VPRs on cluster machines
+
+            // Stop launching VPRs
+            IsLaunching = false;
+            _launcher.StopLaunching();
         }
 
         private bool CanStopLaunching()
