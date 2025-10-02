@@ -1,0 +1,11 @@
+﻿<Application x:Class="LittleVentuzLauncher.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:LittleVentuzLauncher"
+             Startup="App_Startup">
+    
+    <Application.Resources>
+         
+    </Application.Resources>
+    
+</Application>
