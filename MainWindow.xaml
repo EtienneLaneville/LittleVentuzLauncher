@@ -7,8 +7,8 @@
         mc:Ignorable="d"
         Title="Little Ventuz Launcher"
         SizeToContent="Height"
-        Height="500"
-        Width="400">
+        Height="430"
+        Width="700">
 
     <Grid Margin="4">
 
@@ -32,16 +32,16 @@
                             
                             <GridViewColumn DisplayMemberBinding="{Binding Path=Name}"
                                             Header="Name"
-                                            Width="110" />
+                                            Width="160" />
                             <GridViewColumn DisplayMemberBinding="{Binding Path=Version}"
                                             Header="Version"
-                                            Width="60" />
+                                            Width="70" />
                             <GridViewColumn DisplayMemberBinding="{Binding Path=IPAddress}"
                                             Header="IP address"
-                                            Width="80" />
+                                            Width="100" />
                             <GridViewColumn DisplayMemberBinding="{Binding Path=State}"
                                             Header="State"
-                                            Width="80" />
+                                            Width="120" />
                         </GridView>
                     </ListView.View>
                     
@@ -61,6 +61,7 @@
 
                 <TextBox Text="{Binding VprList, UpdateSourceTrigger=PropertyChanged}"
                          AcceptsReturn="True"
+                         FontFamily="Consolas"
                          Height="100" Margin="2"/>
 
                 <TextBlock TextWrapping="Wrap">
