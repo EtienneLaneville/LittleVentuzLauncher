@@ -18,16 +18,13 @@
         </Grid.RowDefinitions>
 
         <GroupBox Margin="2" Grid.Row="0"
-                  Header="Cluster">
+                  Header="Local VMS">
 
             <StackPanel Orientation="Vertical">
-            
-                <TextBlock Text="Available machines:"
-                           Margin="2" />
 
                 <ListView x:Name="availableMachinesListView"
-                          VerticalContentAlignment="Stretch" Height="100"
-                          ItemsSource="{Binding DiscoveredMachines}">
+                          VerticalContentAlignment="Stretch" Height="120"
+                          ItemsSource="{Binding DiscoveredMachines}" Margin="2">
 
                     <ListView.View>
                         
@@ -35,72 +32,19 @@
                             
                             <GridViewColumn DisplayMemberBinding="{Binding Path=Name}"
                                             Header="Name"
-                                            Width="100" />
+                                            Width="110" />
                             <GridViewColumn DisplayMemberBinding="{Binding Path=Version}"
                                             Header="Version"
-                                            Width="80" />
+                                            Width="60" />
                             <GridViewColumn DisplayMemberBinding="{Binding Path=IPAddress}"
-                                            Header="IP"
-                                            Width="90" />
+                                            Header="IP address"
+                                            Width="80" />
                             <GridViewColumn DisplayMemberBinding="{Binding Path=State}"
                                             Header="State"
                                             Width="80" />
                         </GridView>
                     </ListView.View>
-
-                    <ListView.ItemContainerStyle>
-                        <Style TargetType="{x:Type ListViewItem}">
-                            <EventSetter Event="MouseDoubleClick"
-                                         Handler="MachineDoubleClick" />
-                        </Style>
-                    </ListView.ItemContainerStyle>
                     
-                </ListView>
-
-                <Button Content="Add to Cluster"
-                        Width="100"
-                        Height="24"
-                        HorizontalAlignment="Left"
-                        Margin="0,4"
-                        Command="{Binding AddMachinesToClusterCommand}"
-                        CommandParameter="{Binding SelectedItems, ElementName=availableMachinesListView}" />
-
-                <TextBlock Text="Cluster machines:"
-                           Grid.Row="2"
-                           Margin="2" />
-
-                <ListView x:Name="clusterMachinesListView"
-                          Grid.Row="3"
-                          VerticalContentAlignment="Stretch"
-                          Height="100"
-                          ItemsSource="{Binding ClusterMachines}">
-
-                    <ListView.View>
-
-                        <GridView AllowsColumnReorder="False">
-
-                            <GridViewColumn DisplayMemberBinding="{Binding Path=Name}"
-                                            Header="Name"
-                                            Width="100" />
-                            <GridViewColumn DisplayMemberBinding="{Binding Path=Version}"
-                                            Header="Version"
-                                            Width="80" />
-                            <GridViewColumn DisplayMemberBinding="{Binding Path=IPAddress}"
-                                            Header="IP"
-                                            Width="90" />
-                            <GridViewColumn DisplayMemberBinding="{Binding Path=State}"
-                                            Header="State"
-                                            Width="80" />
-                        </GridView>
-                    </ListView.View>
-
-                    <ListView.ItemContainerStyle>
-                        <Style TargetType="{x:Type ListViewItem}">
-                            <EventSetter Event="MouseDoubleClick"
-                                         Handler="MachineDoubleClick" />
-                        </Style>
-                    </ListView.ItemContainerStyle>
-
                 </ListView>
 
             </StackPanel>
@@ -112,9 +56,19 @@
 
             <StackPanel Orientation="Vertical">
 
+                <TextBlock Text="Enter a list of VPRs and the Ventuz version to use:"
+                           TextWrapping="Wrap" Margin="2" />
+
                 <TextBox Text="{Binding VprList, UpdateSourceTrigger=PropertyChanged}"
                          AcceptsReturn="True"
-                         Height="100" />
+                         Height="100" Margin="2"/>
+
+                <TextBlock TextWrapping="Wrap">
+                    Each line should contain the full path to the VPR and the major version number to use, separated by a comma.<LineBreak />
+                    Example:<LineBreak />
+                    <Run Text="D:\Ventuz\FSN 2025\NFL 25\Presentations\NFL25 - 250908 - Case5997.vpr, 8"
+                                  FontFamily="Consolas" />
+                </TextBlock>
 
                 <StackPanel Orientation="Horizontal">
 

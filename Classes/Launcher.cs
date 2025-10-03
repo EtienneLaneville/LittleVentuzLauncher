@@ -20,12 +20,12 @@ namespace LittleVentuzLauncher
 
         #region Members
 
-        private Cluster _cluster;
+        private Cluster? _cluster;
 
         private VMSDiscovery _vmsDiscovery;
         private List<VMS> _discoveredMachines = new List<VMS>();
 
-        private List<VMSClient> _activeVmsClients = new List<VMSClient>();
+        private VMSClient? _activeVmsClient;
 
         private List<VMS> _selectedMachines = new List<VMS>();
         private List<string> _vprList = new List<string>();
@@ -58,6 +58,7 @@ namespace LittleVentuzLauncher
             _vmsDiscovery.PropertyChanged += HandleVmsDiscoveryPropertyChanged;
 
             _cluster = null;
+            _activeVmsClient = null;
 
         }
 
@@ -76,9 +77,7 @@ namespace LittleVentuzLauncher
         /// </summary>
         public void StartVmsDiscovery()
         {
-
             _vmsDiscovery.Discover();
-
         }
 
         /// <summary>
@@ -91,13 +90,19 @@ namespace LittleVentuzLauncher
             {
                 foreach (VMS vms in _vmsDiscovery.Items)
                 {
-                    if (!_discoveredMachines.Contains(vms))
-                    {
-                        // Add VMS to discovered machines list
-                        _discoveredMachines.Add(vms);
 
-                        // Notify of newly discovered VMS
-                        VmsDiscovered?.Invoke(this, new VmsEventArgs(vms));
+                    // Check is VMS is on local machine
+                    if (IsLocalIpAddress(vms.IPAddress))
+                    {
+
+                        if (!_discoveredMachines.Contains(vms))
+                        {
+                            // Add VMS to discovered machines list
+                            _discoveredMachines.Add(vms);
+
+                            // Notify of newly discovered VMS
+                            VmsDiscovered?.Invoke(this, new VmsEventArgs(vms));
+                        }
                     }
                 }
             }
@@ -107,38 +112,59 @@ namespace LittleVentuzLauncher
 
         #region Launching Loop
 
-        public async void StartLaunching(List<VMS> vmsList, List<string> vprs)
+        public async void StartLaunching(List<string> vprs)
         {
 
-            // Store 
+            // Store list of VPRs
             _vprList = vprs;
-            _selectedMachines = vmsList;
 
             bool keepLaunching = true;
             int vprIndex = 0;
-            string vprFullPath = string.Empty;
 
             while (keepLaunching)
             {
-
-                StartCluster(vmsList);
 
                 // Check for VPR in list
                 if (vprIndex <= vprs.Count)
                 {
 
-                    // Get VPR path
-                    vprFullPath = vprs.ElementAt(vprIndex);
+                    // Get VPR line
+                    string vpr = vprs.ElementAt(vprIndex);
+                    string[] vprFields = vpr.Split(",", StringSplitOptions.RemoveEmptyEntries);
 
-                    _vprLoadedEvent.Reset();
+                    if (vprFields.Length == 2)
+                    {
 
-                    await StartVmsClientsAsync(vprFullPath);
+                        string vprFullPath = vprFields[0];
+                        int targetVmsVersion;
 
-                    _vprLoadedEvent.Wait();
+                        if (int.TryParse(vprFields[1], out targetVmsVersion))
+                        {
+
+                            // Find VMS with specified version
+                            foreach (VMS vms in _discoveredMachines)
+                            {
+                                if (vms.Version.Major == targetVmsVersion)
+                                {
+                                    // All set
+                                    StartCluster(vms);
+
+                                    _vprLoadedEvent.Reset();
+
+                                    await StartVmsClientsAsync(vprFullPath);
+
+                                    _vprLoadedEvent.Wait();
+
+                                    StopCluster();
+
+                                }
+                            }
+
+                        }
+
+                    }
 
                 }
-
-                StopCluster();
 
                 // Increment VPR index
                 vprIndex++;
@@ -148,28 +174,23 @@ namespace LittleVentuzLauncher
 
         }
 
-        private void StartCluster(List<VMS> vmsList)
+        private void StartCluster(VMS vms)
         {
 
             // Cluster and VMS Clients
             _cluster = new Cluster();
-            _activeVmsClients.Clear();
 
-            foreach (VMS vms in vmsList)
+            // Create new VMSClient
+            VMSClient client = new VMSClient(vms);
+            _activeVmsClient = client;
+
+            IPAddress ip = vms.IPAddress;
+            if (IsLocalIpAddress(ip))
             {
-
-                // Create new VMSClient
-                VMSClient client = new VMSClient(vms);
-                _activeVmsClients.Add(client);
-
-                IPAddress ip = vms.IPAddress;
-                if (IsLocalIpAddress(ip))
-                {
-                    // for local machine use localhost to avoid network issues
-                    ip = IPAddress.Loopback;
-                }
-                _cluster.AddMachine(new IPEndPoint(ip, Cluster.DEFAULT_PORT));
+                // for local machine use localhost to avoid network issues
+                ip = IPAddress.Loopback;
             }
+            _cluster.AddMachine(new IPEndPoint(ip, Cluster.DEFAULT_PORT));
 
             // Add Cluster event handlers
             _cluster.ClusterStateChanged += HandleClusterStateChanged;
@@ -187,17 +208,21 @@ namespace LittleVentuzLauncher
                 // Shut down Cluster
                 _cluster.Shutdown();
 
-                // SECOND: stop Runtimes and disconnect from VMS clients
-                foreach (VMSClient client in _activeVmsClients)
+                if (_activeVmsClient != null)
                 {
                     try
                     {
-                        client.Kill();
+                        _activeVmsClient.Kill();
                     }
-                    catch (Exception ex)
+                    catch (Exception) { }
+
+                    try
                     {
+                        _activeVmsClient.Disconnect();
                     }
-                    client.Disconnect();
+                    catch (Exception) { }
+
+                    _activeVmsClient = null;
                 }
 
                 _cluster = null;
@@ -217,44 +242,44 @@ namespace LittleVentuzLauncher
 
             if (System.IO.File.Exists(vpr))
             {
-
-                // try to start clients with specified Project
-                foreach (VMSClient client in _activeVmsClients)
+                if (_activeVmsClient != null)
                 {
 
-                    VMSProjectDetails project = GetVmsProjectDetails(client, vpr);
+                    VMSProjectDetails project = GetVmsProjectDetails(_activeVmsClient, vpr);
 
                     if (project == null)
                     {
+
+
                         // Scan projects and try again
-                        client.Scan();
-                        while (client.ScanState())
+                        _activeVmsClient.Scan();
+                        while (_activeVmsClient.ScanState())
                         {
                             await Task.Delay(2000);
                         }
-                        project = GetVmsProjectDetails(client, vpr);
+                        project = GetVmsProjectDetails(_activeVmsClient, vpr);
 
                     }
 
                     if (project != null)
                     {
-                        client.Start(project.ID.ToString());
+                        _activeVmsClient.Start(project.ID.ToString());
                     }
 
                     // Wait 30 seconds for scene to load
                     await Task.Delay(30000);
 
-                    // OK state:
+                    // Set event
                     _vprLoadedEvent.Set();
+
+                    return;
 
                 }
 
             }
-            else
-            {
-                // Resume launching loop
-                _vprLoadedEvent.Set();
-            }
+
+            // Resume launching loop
+            _vprLoadedEvent.Set();
 
         }
 
@@ -379,7 +404,6 @@ namespace LittleVentuzLauncher
                 return false;
             }
 
-            System.Diagnostics.Debug.WriteLine($"{ipAddress.ToString()} is not in the 'AddressFamily.InterNetwork'");
             return false; // Not a local machine's IP address
         }
 

@@ -17,18 +17,6 @@ namespace LittleVentuzLauncher
             InitializeComponent();
         }
 
-        /// <summary>
-        /// Double-click on machines adds it automatically to Cluster list
-        /// </summary>
-        private void MachineDoubleClick(object sender, RoutedEventArgs e)
-        {
-            if (availableMachinesListView.SelectedItems.Count > 0)
-            {
-                GetViewModel().AddMachineToCluster((VMS)availableMachinesListView.SelectedItem);
-            }
-
-        }
-
         private LauncherViewModel GetViewModel()
         {
             return (LauncherViewModel)this.DataContext;
